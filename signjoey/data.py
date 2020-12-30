@@ -49,17 +49,10 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
 
     data_path = data_cfg.get("data_path", "./data")
 
-    if isinstance(data_cfg["train"], list):
-        train_paths = [os.path.join(data_path, x) for x in data_cfg["train"]]
-        dev_paths = [os.path.join(data_path, x) for x in data_cfg["dev"]]
-        test_paths = [os.path.join(data_path, x) for x in data_cfg["test"]]
-        pad_feature_size = sum(data_cfg["feature_size"])
-
-    else:
-        train_paths = os.path.join(data_path, data_cfg["train"])
-        dev_paths = os.path.join(data_path, data_cfg["dev"])
-        test_paths = os.path.join(data_path, data_cfg["test"])
-        pad_feature_size = data_cfg["feature_size"]
+    train_paths = os.path.join(data_path, data_cfg["train"])
+    dev_paths = os.path.join(data_path, data_cfg["dev"])
+    test_paths = os.path.join(data_path, data_cfg["test"])
+    pad_feature_size = data_cfg["feature_size"]
 
     level = data_cfg["level"]
     txt_lowercase = data_cfg["txt_lowercase"]
@@ -73,25 +66,48 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
 
     def tokenize_features(features):
         ft_list = torch.split(features, 1, dim=0)
-        return [ft.squeeze() for ft in ft_list]
+        return [ft.flatten() for ft in ft_list]
 
     # NOTE (Cihan): The something was necessary to match the function signature.
     def stack_features(features, something):
         return torch.stack([torch.stack(ft, dim=0) for ft in features], dim=0)
+    
+    kwargs_feature_field = {
+        "use_vocab": False,
+        "init_token": None,
+        "dtype": torch.float32,
+        "preprocessing": tokenize_features,
+        "batch_first": True,
+        "include_lengths": True,
+        "postprocessing": stack_features,
+    }
+    
+    keypoints_cfg = data_cfg.get("keypoints")
+    if keypoints_cfg is not None:
+        keypoints_train_path = os.path.join(data_path, keypoints_cfg["train"])
+        keypoints_dev_path = os.path.join(data_path, keypoints_cfg["dev"])
+        keypoints_test_path = os.path.join(data_path, keypoints_cfg["test"])
+        
+        keypoints_fields = []
+        for part in ["body", "hand", "face"]:
+            part_feature_size = keypoints_cfg["feature_size"][part+"_keypoints"]
+            part_field = data.Field(
+                pad_token=torch.zeros((part_feature_size,)),
+                **kwargs_feature_field
+            )
+            keypoints_fields.append((part, part_field))
+    else:
+        keypoints_train_path = None
+        keypoints_dev_path = None
+        keypoints_test_path = None
+        keypoints_fields = None
 
     sequence_field = data.RawField()
     signer_field = data.RawField()
 
     sgn_field = data.Field(
-        use_vocab=False,
-        init_token=None,
-        dtype=torch.float32,
-        preprocessing=tokenize_features,
-        tokenize=lambda features: features,  # TODO (Cihan): is this necessary?
-        batch_first=True,
-        include_lengths=True,
-        postprocessing=stack_features,
         pad_token=torch.zeros((pad_feature_size,)),
+        **kwargs_feature_field
     )
 
     gls_field = data.Field(
@@ -116,6 +132,8 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     train_data = SignTranslationDataset(
         path=train_paths,
         fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
+        keypoints_path=keypoints_train_path,
+        keypoints_fields=keypoints_fields,
         filter_pred=lambda x: len(vars(x)["sgn"]) <= max_sent_length
         and len(vars(x)["txt"]) <= max_sent_length,
     )
@@ -154,6 +172,8 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     dev_data = SignTranslationDataset(
         path=dev_paths,
         fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
+        keypoints_path=keypoints_dev_path,
+        keypoints_fields=keypoints_fields,
     )
     random_dev_subset = data_cfg.get("random_dev_subset", -1)
     if random_dev_subset > -1:
@@ -168,6 +188,8 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
     test_data = SignTranslationDataset(
         path=test_paths,
         fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
+        keypoints_path=keypoints_test_path,
+        keypoints_fields=keypoints_fields,
     )
 
     gls_field.vocab = gls_vocab

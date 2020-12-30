@@ -2,13 +2,18 @@
 """
 Data module
 """
+import pickle
+import gzip
+
+import torch
 from torchtext import data
 from torchtext.data import Field, RawField
 from typing import List, Tuple
-import pickle
-import gzip
-import torch
 
+
+def save_dataset_file(saved_object, filename):
+    with gzip.open(filename, "wb") as f:
+        pickle.dump(saved_object, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 def load_dataset_file(filename):
     with gzip.open(filename, "rb") as f:
@@ -27,26 +32,34 @@ class SignTranslationDataset(data.Dataset):
         self,
         path: str,
         fields: Tuple[RawField, RawField, Field, Field, Field],
+        keypoints_path,
+        keypoints_fields,
         **kwargs
     ):
         """Create a SignTranslationDataset given paths and fields.
 
         Arguments:
             path: Common prefix of paths to the data files for both languages.
-            exts: A tuple containing the extension to path for each language.
             fields: A tuple containing the fields that will be used for data
                 in each language.
+            keypoints_path: String of the path to the data file of body
+                keypoints extracted from the dataset.
+            keypoints_fields: A tuple containing the fields for each body part
+                keypoints.
             Remaining keyword arguments: Passed to the constructor of
                 data.Dataset.
         """
-        if not isinstance(fields[0], (tuple, list)):
-            fields = [
-                ("sequence", fields[0]),
-                ("signer", fields[1]),
-                ("sgn", fields[2]),
-                ("gls", fields[3]),
-                ("txt", fields[4]),
-            ]
+        include_keypoints = keypoints_path is not None and keypoints_fields is not None
+        
+        fields = [
+            ("sequence", fields[0]),
+            ("signer", fields[1]),
+            ("sgn", fields[2]),
+            ("gls", fields[3]),
+            ("txt", fields[4]),
+        ]
+        if include_keypoints:
+            fields += keypoints_fields
 
         if not isinstance(path, list):
             path = [path]
@@ -72,10 +85,24 @@ class SignTranslationDataset(data.Dataset):
                         "text": s["text"],
                         "sign": s["sign"],
                     }
+        
+        if include_keypoints:
+            keypoints_data = load_dataset_file(keypoints_path)
 
         examples = []
         for s in samples:
             sample = samples[s]
+            
+            if include_keypoints:
+                sequence_keypoints = keypoints_data[sample["name"]]
+                keypoints_features = [
+                    sequence_keypoints["body_keypoints"],
+                    sequence_keypoints["hand_keypoints"],
+                    sequence_keypoints["face_keypoints"],
+                ]
+            else:
+                keypoints_features = []
+            
             examples.append(
                 data.Example.fromlist(
                     [
@@ -83,8 +110,10 @@ class SignTranslationDataset(data.Dataset):
                         sample["signer"],
                         # This is for numerical stability
                         sample["sign"] + 1e-8,
+                        # Removing left and right whitespaces
                         sample["gloss"].strip(),
                         sample["text"].strip(),
+                        *keypoints_features,
                     ],
                     fields,
                 )

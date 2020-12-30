@@ -1021,7 +1021,8 @@ def train(cfg_file: str) -> None:
     # train the model
     trainer.train_and_validate(train_data=train_data, valid_data=dev_data)
     # Delete to speed things up as we don't need training data anymore
-    del train_data, dev_data, test_data
+    del train_data
+    data = dev_data, test_data, gls_vocab, txt_vocab
 
     # predict with the best model on validation and test
     # (if test data is available)
@@ -1030,7 +1031,7 @@ def train(cfg_file: str) -> None:
     output_path = os.path.join(trainer.model_dir, output_name)
     logger = trainer.logger
     del trainer
-    test(cfg_file, ckpt=ckpt, output_path=output_path, logger=logger)
+    test(cfg_file, ckpt=ckpt, output_path=output_path, logger=logger, data=data)
 
 
 if __name__ == "__main__":

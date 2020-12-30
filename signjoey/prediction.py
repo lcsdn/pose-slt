@@ -278,7 +278,11 @@ def validate_on_data(
 
 # pylint: disable-msg=logging-too-many-args
 def test(
-    cfg_file, ckpt: str, output_path: str = None, logger: logging.Logger = None
+    cfg_file,
+    ckpt: str,
+    output_path: str = None,
+    logger: logging.Logger = None,
+    data = None,
 ) -> None:
     """
     Main test function. Handles loading a model from checkpoint, generating
@@ -321,7 +325,11 @@ def test(
     )
 
     # load the data
-    _, dev_data, test_data, gls_vocab, txt_vocab = load_data(data_cfg=cfg["data"])
+    if data is not None:
+        dev_data, test_data, gls_vocab, txt_vocab = data
+    else:
+        _, dev_data, test_data, gls_vocab, txt_vocab = load_data(data_cfg=cfg["data"])
+
 
     # load model state from disk
     model_checkpoint = load_checkpoint(ckpt, use_cuda=use_cuda)
