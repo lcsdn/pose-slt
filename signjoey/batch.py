@@ -40,6 +40,7 @@ class Batch:
         self.signer = torch_batch.signer
         # Sign
         self.sgn, self.sgn_lengths = torch_batch.sgn
+            
 
         # Here be dragons
         if frame_subsampling_ratio:
@@ -86,6 +87,11 @@ class Batch:
         # Gloss
         self.gls = None
         self.gls_lengths = None
+        
+        # Keypoints
+        self.body = None
+        self.hand = None
+        self.face = None
 
         # Other
         self.num_txt_tokens = None
@@ -108,6 +114,13 @@ class Batch:
             self.gls, self.gls_lengths = torch_batch.gls
             self.num_gls_tokens = self.gls_lengths.sum().detach().clone().numpy()
 
+        if hasattr(torch_batch, "body"):
+            assert hasattr(torch_batch, "hand")
+            assert hasattr(torch_batch, "face")
+            self.body = torch_batch.body[0]
+            self.hand = torch_batch.hand[0]
+            self.face = torch_batch.face[0]
+            
         if use_cuda:
             self._make_cuda()
 
@@ -124,6 +137,11 @@ class Batch:
             self.txt = self.txt.cuda()
             self.txt_mask = self.txt_mask.cuda()
             self.txt_input = self.txt_input.cuda()
+        
+        if self.body is not None:
+            self.body = self.body.cuda()
+            self.hand = self.hand.cuda()
+            self.face = self.face.cuda()
 
     def sort_by_sgn_lengths(self):
         """
@@ -152,6 +170,11 @@ class Batch:
             self.txt_mask = self.txt_mask[perm_index]
             self.txt_input = self.txt_input[perm_index]
             self.txt_lengths = self.txt_lengths[perm_index]
+        
+        if self.body is not None:
+            self.body = self.body[perm_index]
+            self.hand = self.hand[perm_index]
+            self.face = self.face[perm_index]
 
         if self.use_cuda:
             self._make_cuda()
