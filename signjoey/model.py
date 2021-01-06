@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from itertools import groupby
 from signjoey.initialization import initialize_model
-from signjoey.embeddings import Embeddings, SpatialEmbeddings
+from signjoey.embeddings import Embeddings, FeatureEmbeddings
 from signjoey.encoders import Encoder, RecurrentEncoder, TransformerEncoder
 from signjoey.decoders import Decoder, RecurrentDecoder, TransformerDecoder
 from signjoey.search import beam_search, greedy
@@ -23,7 +23,7 @@ from signjoey.vocabulary import (
 from signjoey.batch import Batch
 from signjoey.helpers import freeze_params
 from torch import Tensor
-from typing import Union
+from typing import List, Union
 
 
 class SignModel(nn.Module):
@@ -33,10 +33,11 @@ class SignModel(nn.Module):
 
     def __init__(
         self,
+        feature_names: List[str],
         encoder: Encoder,
         gloss_output_layer: nn.Module,
         decoder: Decoder,
-        sgn_embed: SpatialEmbeddings,
+        sgn_embed: FeatureEmbeddings,
         txt_embed: Embeddings,
         gls_vocab: GlossVocabulary,
         txt_vocab: TextVocabulary,
@@ -56,10 +57,12 @@ class SignModel(nn.Module):
         :param do_translation: flag to build the model with translation decoder.
         """
         super().__init__()
-
+        
+        self.feature_names = feature_names
+        
         self.encoder = encoder
         self.decoder = decoder
-
+        
         self.sgn_embed = sgn_embed
         self.txt_embed = txt_embed
 
@@ -77,7 +80,7 @@ class SignModel(nn.Module):
     # pylint: disable=arguments-differ
     def forward(
         self,
-        sgn: Tensor,
+        features: List[Tensor],
         sgn_mask: Tensor,
         sgn_lengths: Tensor,
         txt_input: Tensor,
@@ -95,7 +98,9 @@ class SignModel(nn.Module):
         :return: decoder outputs
         """
         encoder_output, encoder_hidden = self.encode(
-            sgn=sgn, sgn_mask=sgn_mask, sgn_length=sgn_lengths
+            features=features,
+            sgn_mask=sgn_mask,
+            sgn_length=sgn_lengths
         )
 
         if self.do_recognition:
@@ -125,7 +130,7 @@ class SignModel(nn.Module):
         return decoder_outputs, gloss_probabilities
 
     def encode(
-        self, sgn: Tensor, sgn_mask: Tensor, sgn_length: Tensor
+        self, features: List[Tensor], sgn_mask: Tensor, sgn_length: Tensor
     ) -> (Tensor, Tensor):
         """
         Encodes the source sentence.
@@ -136,7 +141,7 @@ class SignModel(nn.Module):
         :return: encoder outputs (output, hidden_concat)
         """
         return self.encoder(
-            embed_src=self.sgn_embed(x=sgn, mask=sgn_mask),
+            embed_src=self.sgn_embed(inputs=features, mask=sgn_mask),
             src_length=sgn_length,
             mask=sgn_mask,
         )
@@ -172,6 +177,13 @@ class SignModel(nn.Module):
             unroll_steps=unroll_steps,
             hidden=decoder_hidden,
         )
+    
+    def get_feature_from_batch(self, batch: Batch):
+        features = [
+            getattr(batch, feature_name)
+            for feature_name in self.feature_names
+        ]
+        return features
 
     def get_loss_for_batch(
         self,
@@ -193,10 +205,12 @@ class SignModel(nn.Module):
         :return: translation_loss: sum of losses over non-pad elements in the batch
         """
         # pylint: disable=unused-variable
+        
+        features = self.get_feature_from_batch(batch)
 
         # Do a forward pass
         decoder_outputs, gloss_probabilities = self.forward(
-            sgn=batch.sgn,
+            features=features,
             sgn_mask=batch.sgn_mask,
             sgn_lengths=batch.sgn_lengths,
             txt_input=batch.txt_input,
@@ -253,9 +267,13 @@ class SignModel(nn.Module):
         :return: stacked_output: hypotheses for batch,
             stacked_attention_scores: attention scores for batch
         """
+        
+        features = self.get_feature_from_batch(batch)
 
         encoder_output, encoder_hidden = self.encode(
-            sgn=batch.sgn, sgn_mask=batch.sgn_mask, sgn_length=batch.sgn_lengths
+            features=features,
+            sgn_mask=batch.sgn_mask,
+            sgn_length=batch.sgn_lengths
         )
 
         if self.do_recognition:
@@ -351,7 +369,6 @@ class SignModel(nn.Module):
 
 def build_model(
     cfg: dict,
-    sgn_dim: int,
     gls_vocab: GlossVocabulary,
     txt_vocab: TextVocabulary,
     do_recognition: bool = True,
@@ -361,20 +378,22 @@ def build_model(
     Build and initialize the model according to the configuration.
 
     :param cfg: dictionary configuration containing model specifications
-    :param sgn_dim: feature dimension of the sign frame representation, i.e. 2560 for EfficientNet-7.
     :param gls_vocab: sign gloss vocabulary
     :param txt_vocab: spoken language word vocabulary
     :return: built and initialized model
     :param do_recognition: flag to build the model with recognition output.
     :param do_translation: flag to build the model with translation decoder.
     """
+    
+    features = cfg.get("features", {"sgn": 1024})
+    feature_names = list(features.keys())
 
     txt_padding_idx = txt_vocab.stoi[PAD_TOKEN]
 
-    sgn_embed: SpatialEmbeddings = SpatialEmbeddings(
+    sgn_embed: FeatureEmbeddings = FeatureEmbeddings(
         **cfg["encoder"]["embeddings"],
         num_heads=cfg["encoder"]["num_heads"],
-        input_size=sgn_dim,
+        input_sizes=list(features.values()),
     )
 
     # build encoder
@@ -436,6 +455,7 @@ def build_model(
         decoder = None
 
     model: SignModel = SignModel(
+        feature_names=feature_names,
         encoder=encoder,
         gloss_output_layer=gloss_output_layer,
         decoder=decoder,

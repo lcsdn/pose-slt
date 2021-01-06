@@ -1,6 +1,7 @@
 import math
-import torch
+from typing import List
 
+import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
 from signjoey.helpers import freeze_params
@@ -241,4 +242,92 @@ class SpatialEmbeddings(nn.Module):
             self.__class__.__name__,
             self.embedding_dim,
             self.input_size,
+        )
+
+
+class FeatureEmbeddings(nn.Module):
+
+    """
+    Encodes a list of features of different types
+    (e.g. images, keypoints...)
+    by a simple linear projection layer
+    """
+
+    # pylint: disable=unused-argument
+    def __init__(
+        self,
+        embedding_dim: int,
+        input_sizes: List[int],
+        num_heads: int,
+        freeze: bool = False,
+        norm_type: str = None,
+        activation_type: str = None,
+        scale: bool = False,
+        scale_factor: float = None,
+        **kwargs
+    ):
+        """
+        Create new embeddings for the vocabulary.
+        Use scaling for the Transformer.
+
+        :param embedding_dim:
+        :param input_size:
+        :param freeze: freeze the embeddings during training
+        """
+        super().__init__()
+
+        self.embedding_dim = embedding_dim
+        self.num_inputs = len(input_sizes)
+        self.input_sizes = input_sizes
+        self.lin_layers = nn.ModuleList([
+            nn.Linear(input_size, self.embedding_dim)
+            for input_size in self.input_sizes
+        ])
+
+        self.norm_type = norm_type
+        if self.norm_type:
+            self.norm = MaskedNorm(
+                norm_type=norm_type, num_groups=num_heads, num_features=embedding_dim
+            )
+
+        self.activation_type = activation_type
+        if self.activation_type:
+            self.activation = get_activation(activation_type)
+
+        self.scale = scale
+        if self.scale:
+            if scale_factor:
+                self.scale_factor = scale_factor
+            else:
+                self.scale_factor = math.sqrt(self.embedding_dim)
+
+        if freeze:
+            freeze_params(self)
+
+    # pylint: disable=arguments-differ
+    def forward(self, inputs: List[Tensor], mask: Tensor) -> Tensor:
+        """
+        :param mask: frame masks
+        :param x: list of input features extracted from frames
+        :return: embedded representation for `x`
+        """
+
+        x = sum([self.lin_layers[i](inputs[i]) for i in range(self.num_inputs)])
+
+        if self.norm_type:
+            x = self.norm(x, mask)
+
+        if self.activation_type:
+            x = self.activation(x)
+
+        if self.scale:
+            return x * self.scale_factor
+        else:
+            return x
+
+    def __repr__(self):
+        return "%s(embedding_dim=%d, input_sizes=%s)" % (
+            self.__class__.__name__,
+            self.embedding_dim,
+            self.input_sizes,
         )

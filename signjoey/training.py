@@ -985,9 +985,6 @@ def train(cfg_file: str) -> None:
         cfg=cfg["model"],
         gls_vocab=gls_vocab,
         txt_vocab=txt_vocab,
-        sgn_dim=sum(cfg["data"]["feature_size"])
-        if isinstance(cfg["data"]["feature_size"], list)
-        else cfg["data"]["feature_size"],
         do_recognition=do_recognition,
         do_translation=do_translation,
     )

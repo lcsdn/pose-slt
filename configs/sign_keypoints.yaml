@@ -123,3 +123,8 @@ model:
         hidden_size: 512
         ff_size: 2048
         dropout: 0.1
+    features:
+        sgn: 1024
+        body: 65
+        hand: 210
+        face: 420
