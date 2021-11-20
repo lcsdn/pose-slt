@@ -49,25 +49,28 @@ class PoseEstimator:
         self.ppi_kwargs = {part+'_ppi_kwargs': ckpt[part+'_ppi_kwargs']
                            for part in ["body", "hand", "face"]}
 
-    def __call__(self,
-                 image: Union[Image.Image, str],
-                 trim: bool = False,
-                 visu: bool = False,
-                 postprocessing: Optional[str] = None) -> dict:
-        if postprocessing is None:
-            postprocessing = self.postprocessing
-        assert postprocessing in ["nms", "ppi"]
-        
+    def load_image(self, image: Union[Image.Image, str]) -> list:
         # Load the image if given file path
         if isinstance(image, str):
             assert os.path.isfile(image)
             image_path = image
             image = Image.open(image)
-        
         #image = image.resize((210, 300)) # compensate distorsion of images from PHOENIX-14T
         imlist = [ToTensor()(image).to(self.device)]
         if self.half:
             imlist = [im.half() for im in imlist]
+        return imlist
+
+    def detect_keypoints(self,
+               image: Union[Image.Image, str],
+               trim: bool = False,
+               visu: bool = False,
+               postprocessing: Optional[str] = None) -> dict:
+        if postprocessing is None:
+            postprocessing = self.postprocessing
+        assert postprocessing in ["nms", "ppi"]
+        
+        imlist = self.load_image(image)
         resolution = imlist[0].size()[-2:]
         
         # Forward pass
@@ -84,10 +87,24 @@ class PoseEstimator:
             detections['hand'] = detections['hand'][:2]
         
         if visu:
+            assert isinstance(image, str)
+            image_path = image
+            assert os.path.isfile(image_path)
+            image = Image.open(image)
             output_path = f"{image_path}_{os.path.basename(self.model_path)[:-8]}_{postprocessing}.jpg"
             self._visualisation_2d(detections, image, output_path)
     
         return detections
+        
+    def compute_features(self, image: Union[Image.Image, str]) -> torch.tensor:
+        imlist= self.load_image(image)
+        with torch.no_grad():
+            images, targets = self.model.transform(imlist)
+            features = self.model.backbone(images.tensors)
+            if isinstance(features, torch.Tensor):
+                features = OrderedDict([('0', features)])
+            proposals, _ = self.model.rpn(images, features, targets)
+        return proposals
 
     def _postprocess_results(self,
                              results: dict,
@@ -226,7 +243,7 @@ def build_keypoints_set(dataset_path: str, pose_estimator: PoseEstimator, verbos
                 keypoints_subset[keypoints["name"]] = keypoints
                 if verbose:
                     i += 1
-                    print(f'({int(100 * i / len(sequence_filenames)):02}%) Extracted keypoints in sequence "{subset_name}/{name}"')
+                    print(f'({int(100 * i / len(sequence_filenames)):02}%) Extracted keypoints in sequence "{subset_name}/{filename}"')
             keypoints_set.append(keypoints_subset)
         else:
             if verbose:
