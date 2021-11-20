@@ -115,10 +115,10 @@ class Batch:
             self.num_gls_tokens = self.gls_lengths.sum().detach().clone().numpy()
 
         if hasattr(torch_batch, "body"):
-            assert hasattr(torch_batch, "hand")
-            assert hasattr(torch_batch, "face")
             self.body = torch_batch.body[0]
+        if hasattr(torch_batch, "hand"):
             self.hand = torch_batch.hand[0]
+        if  hasattr(torch_batch, "face"):
             self.face = torch_batch.face[0]
             
         if use_cuda:
@@ -139,8 +139,10 @@ class Batch:
             self.txt_input = self.txt_input.cuda()
         
         if self.body is not None:
-            self.body = self.body.cuda()
-            self.hand = self.hand.cuda()
+            self.body = self.body.cuda()        
+        if self.hand is not None:
+            self.hand = self.hand.cuda()        
+        if self.face is not None:
             self.face = self.face.cuda()
 
     def sort_by_sgn_lengths(self):
@@ -172,8 +174,10 @@ class Batch:
             self.txt_lengths = self.txt_lengths[perm_index]
         
         if self.body is not None:
-            self.body = self.body[perm_index]
-            self.hand = self.hand[perm_index]
+            self.body = self.body[perm_index]        
+        if self.hand is not None:
+            self.hand = self.hand[perm_index]        
+        if self.face is not None:
             self.face = self.face[perm_index]
 
         if self.use_cuda:

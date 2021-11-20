@@ -341,9 +341,6 @@ def test(
         cfg=cfg["model"],
         gls_vocab=gls_vocab,
         txt_vocab=txt_vocab,
-        sgn_dim=sum(cfg["data"]["feature_size"])
-        if isinstance(cfg["data"]["feature_size"], list)
-        else cfg["data"]["feature_size"],
         do_recognition=do_recognition,
         do_translation=do_translation,
     )
@@ -565,75 +562,77 @@ def test(
     )
     logger.info("*" * 60)
 
-    test_best_result = validate_on_data(
-        model=model,
-        data=test_data,
-        batch_size=batch_size,
-        use_cuda=use_cuda,
-        batch_type=batch_type,
-        dataset_version=dataset_version,
-        sgn_dim=sum(cfg["data"]["feature_size"])
-        if isinstance(cfg["data"]["feature_size"], list)
-        else cfg["data"]["feature_size"],
-        txt_pad_index=txt_vocab.stoi[PAD_TOKEN],
-        do_recognition=do_recognition,
-        recognition_loss_function=recognition_loss_function if do_recognition else None,
-        recognition_loss_weight=1 if do_recognition else None,
-        recognition_beam_size=dev_best_recognition_beam_size
-        if do_recognition
-        else None,
-        do_translation=do_translation,
-        translation_loss_function=translation_loss_function if do_translation else None,
-        translation_loss_weight=1 if do_translation else None,
-        translation_max_output_length=translation_max_output_length
-        if do_translation
-        else None,
-        level=level if do_translation else None,
-        translation_beam_size=dev_best_translation_beam_size
-        if do_translation
-        else None,
-        translation_beam_alpha=dev_best_translation_alpha if do_translation else None,
-        frame_subsampling_ratio=frame_subsampling_ratio,
-    )
-
-    logger.info(
-        "[TEST] partition [Recognition & Translation] results:\n\t"
-        "Best CTC Decode Beam Size: %d\n\t"
-        "Best Translation Beam Size: %d and Alpha: %d\n\t"
-        "WER %3.2f\t(DEL: %3.2f,\tINS: %3.2f,\tSUB: %3.2f)\n\t"
-        "BLEU-4 %.2f\t(BLEU-1: %.2f,\tBLEU-2: %.2f,\tBLEU-3: %.2f,\tBLEU-4: %.2f)\n\t"
-        "CHRF %.2f\t"
-        "ROUGE %.2f",
-        dev_best_recognition_beam_size if do_recognition else -1,
-        dev_best_translation_beam_size if do_translation else -1,
-        dev_best_translation_alpha if do_translation else -1,
-        test_best_result["valid_scores"]["wer"] if do_recognition else -1,
-        test_best_result["valid_scores"]["wer_scores"]["del_rate"]
-        if do_recognition
-        else -1,
-        test_best_result["valid_scores"]["wer_scores"]["ins_rate"]
-        if do_recognition
-        else -1,
-        test_best_result["valid_scores"]["wer_scores"]["sub_rate"]
-        if do_recognition
-        else -1,
-        test_best_result["valid_scores"]["bleu"] if do_translation else -1,
-        test_best_result["valid_scores"]["bleu_scores"]["bleu1"]
-        if do_translation
-        else -1,
-        test_best_result["valid_scores"]["bleu_scores"]["bleu2"]
-        if do_translation
-        else -1,
-        test_best_result["valid_scores"]["bleu_scores"]["bleu3"]
-        if do_translation
-        else -1,
-        test_best_result["valid_scores"]["bleu_scores"]["bleu4"]
-        if do_translation
-        else -1,
-        test_best_result["valid_scores"]["chrf"] if do_translation else -1,
-        test_best_result["valid_scores"]["rouge"] if do_translation else -1,
-    )
-    logger.info("*" * 60)
+    do_test = cfg["testing"].get("use_test_data", False)
+    if do_test:
+        test_best_result = validate_on_data(
+            model=model,
+            data=test_data,
+            batch_size=batch_size,
+            use_cuda=use_cuda,
+            batch_type=batch_type,
+            dataset_version=dataset_version,
+            sgn_dim=sum(cfg["data"]["feature_size"])
+            if isinstance(cfg["data"]["feature_size"], list)
+            else cfg["data"]["feature_size"],
+            txt_pad_index=txt_vocab.stoi[PAD_TOKEN],
+            do_recognition=do_recognition,
+            recognition_loss_function=recognition_loss_function if do_recognition else None,
+            recognition_loss_weight=1 if do_recognition else None,
+            recognition_beam_size=dev_best_recognition_beam_size
+            if do_recognition
+            else None,
+            do_translation=do_translation,
+            translation_loss_function=translation_loss_function if do_translation else None,
+            translation_loss_weight=1 if do_translation else None,
+            translation_max_output_length=translation_max_output_length
+            if do_translation
+            else None,
+            level=level if do_translation else None,
+            translation_beam_size=dev_best_translation_beam_size
+            if do_translation
+            else None,
+            translation_beam_alpha=dev_best_translation_alpha if do_translation else None,
+            frame_subsampling_ratio=frame_subsampling_ratio,
+        )
+    
+        logger.info(
+            "[TEST] partition [Recognition & Translation] results:\n\t"
+            "Best CTC Decode Beam Size: %d\n\t"
+            "Best Translation Beam Size: %d and Alpha: %d\n\t"
+            "WER %3.2f\t(DEL: %3.2f,\tINS: %3.2f,\tSUB: %3.2f)\n\t"
+            "BLEU-4 %.2f\t(BLEU-1: %.2f,\tBLEU-2: %.2f,\tBLEU-3: %.2f,\tBLEU-4: %.2f)\n\t"
+            "CHRF %.2f\t"
+            "ROUGE %.2f",
+            dev_best_recognition_beam_size if do_recognition else -1,
+            dev_best_translation_beam_size if do_translation else -1,
+            dev_best_translation_alpha if do_translation else -1,
+            test_best_result["valid_scores"]["wer"] if do_recognition else -1,
+            test_best_result["valid_scores"]["wer_scores"]["del_rate"]
+            if do_recognition
+            else -1,
+            test_best_result["valid_scores"]["wer_scores"]["ins_rate"]
+            if do_recognition
+            else -1,
+            test_best_result["valid_scores"]["wer_scores"]["sub_rate"]
+            if do_recognition
+            else -1,
+            test_best_result["valid_scores"]["bleu"] if do_translation else -1,
+            test_best_result["valid_scores"]["bleu_scores"]["bleu1"]
+            if do_translation
+            else -1,
+            test_best_result["valid_scores"]["bleu_scores"]["bleu2"]
+            if do_translation
+            else -1,
+            test_best_result["valid_scores"]["bleu_scores"]["bleu3"]
+            if do_translation
+            else -1,
+            test_best_result["valid_scores"]["bleu_scores"]["bleu4"]
+            if do_translation
+            else -1,
+            test_best_result["valid_scores"]["chrf"] if do_translation else -1,
+            test_best_result["valid_scores"]["rouge"] if do_translation else -1,
+        )
+        logger.info("*" * 60)
 
     def _write_to_file(file_path: str, sequence_ids: List[str], hypotheses: List[str]):
         with open(file_path, mode="w", encoding="utf-8") as out_file:
@@ -650,14 +649,16 @@ def test(
                 [s for s in dev_data.sequence],
                 dev_best_recognition_result["gls_hyp"],
             )
-            test_gls_output_path_set = "{}.BW_{:03d}.{}.gls".format(
-                output_path, dev_best_recognition_beam_size, "test"
-            )
-            _write_to_file(
-                test_gls_output_path_set,
-                [s for s in test_data.sequence],
-                test_best_result["gls_hyp"],
-            )
+            
+            if do_test:
+                test_gls_output_path_set = "{}.BW_{:03d}.{}.gls".format(
+                    output_path, dev_best_recognition_beam_size, "test"
+                )
+                _write_to_file(
+                    test_gls_output_path_set,
+                    [s for s in test_data.sequence],
+                    test_best_result.get("gls_hyp", "no test"),
+                )
 
         if do_translation:
             if dev_best_translation_beam_size > -1:
@@ -667,30 +668,36 @@ def test(
                     dev_best_translation_alpha,
                     "dev",
                 )
-                test_txt_output_path_set = "{}.BW_{:02d}.A_{:1d}.{}.txt".format(
-                    output_path,
-                    dev_best_translation_beam_size,
-                    dev_best_translation_alpha,
-                    "test",
-                )
+                
+                if do_test:
+                    test_txt_output_path_set = "{}.BW_{:02d}.A_{:1d}.{}.txt".format(
+                        output_path,
+                        dev_best_translation_beam_size,
+                        dev_best_translation_alpha,
+                        "test",
+                    )
             else:
                 dev_txt_output_path_set = "{}.BW_{:02d}.{}.txt".format(
                     output_path, dev_best_translation_beam_size, "dev"
                 )
-                test_txt_output_path_set = "{}.BW_{:02d}.{}.txt".format(
-                    output_path, dev_best_translation_beam_size, "test"
-                )
+                
+                if do_test:
+                    test_txt_output_path_set = "{}.BW_{:02d}.{}.txt".format(
+                        output_path, dev_best_translation_beam_size, "test"
+                    )
 
             _write_to_file(
                 dev_txt_output_path_set,
                 [s for s in dev_data.sequence],
                 dev_best_translation_result["txt_hyp"],
             )
-            _write_to_file(
-                test_txt_output_path_set,
-                [s for s in test_data.sequence],
-                test_best_result["txt_hyp"],
-            )
+            
+            if do_test:
+                _write_to_file(
+                    test_txt_output_path_set,
+                    [s for s in test_data.sequence],
+                    test_best_result.get("txt_hyp", "no test"),
+                )
 
         with open(output_path + ".dev_results.pkl", "wb") as out:
             pickle.dump(
@@ -704,5 +711,7 @@ def test(
                 },
                 out,
             )
-        with open(output_path + ".test_results.pkl", "wb") as out:
-            pickle.dump(test_best_result, out)
+            
+        if do_test:
+            with open(output_path + ".test_results.pkl", "wb") as out:
+                pickle.dump(test_best_result, out)

@@ -96,11 +96,13 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
                 **kwargs_feature_field
             )
             keypoints_fields.append((part, part_field))
+        keypoints_dimension = keypoints_cfg.get("dimension")
     else:
         keypoints_train_path = None
         keypoints_dev_path = None
         keypoints_test_path = None
         keypoints_fields = None
+        keypoints_dimension = None
 
     sequence_field = data.RawField()
     signer_field = data.RawField()
@@ -134,6 +136,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
         fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
         keypoints_path=keypoints_train_path,
         keypoints_fields=keypoints_fields,
+        keypoints_dimension=keypoints_dimension,
         filter_pred=lambda x: len(vars(x)["sgn"]) <= max_sent_length
         and len(vars(x)["txt"]) <= max_sent_length,
     )
@@ -174,6 +177,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
         fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
         keypoints_path=keypoints_dev_path,
         keypoints_fields=keypoints_fields,
+        keypoints_dimension=keypoints_dimension,
     )
     random_dev_subset = data_cfg.get("random_dev_subset", -1)
     if random_dev_subset > -1:
@@ -190,6 +194,7 @@ def load_data(data_cfg: dict) -> (Dataset, Dataset, Dataset, Vocabulary, Vocabul
         fields=(sequence_field, signer_field, sgn_field, gls_field, txt_field),
         keypoints_path=keypoints_test_path,
         keypoints_fields=keypoints_fields,
+        keypoints_dimension=keypoints_dimension,
     )
 
     gls_field.vocab = gls_vocab

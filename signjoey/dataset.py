@@ -8,7 +8,7 @@ import gzip
 import torch
 from torchtext import data
 from torchtext.data import Field, RawField
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 
 def save_dataset_file(saved_object, filename):
@@ -32,8 +32,9 @@ class SignTranslationDataset(data.Dataset):
         self,
         path: str,
         fields: Tuple[RawField, RawField, Field, Field, Field],
-        keypoints_path,
-        keypoints_fields,
+        keypoints_path: Optional[str],
+        keypoints_fields: Optional[list],
+        keypoints_dimension: Optional[int],
         **kwargs
     ):
         """Create a SignTranslationDataset given paths and fields.
@@ -60,6 +61,12 @@ class SignTranslationDataset(data.Dataset):
         ]
         if include_keypoints:
             fields += keypoints_fields
+            if keypoints_dimension is None:
+                dimension_selection = list(range(5))
+            elif keypoints_dimension == 2:
+                dimension_selection = [0, 1]
+            elif keypoints_dimension == 3:
+                dimension_selection = [2, 3, 4]
 
         if not isinstance(path, list):
             path = [path]
@@ -96,9 +103,9 @@ class SignTranslationDataset(data.Dataset):
             if include_keypoints:
                 sequence_keypoints = keypoints_data[sample["name"]]
                 keypoints_features = [
-                    sequence_keypoints["body_keypoints"],
-                    sequence_keypoints["hand_keypoints"],
-                    sequence_keypoints["face_keypoints"],
+                    sequence_keypoints["body_keypoints"][:, :, dimension_selection],
+                    sequence_keypoints["hand_keypoints"][:, :, :, dimension_selection],
+                    sequence_keypoints["face_keypoints"][:, :, dimension_selection],
                 ]
             else:
                 keypoints_features = []
